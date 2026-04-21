@@ -28,6 +28,7 @@ from tkinter import messagebox
 from Generators import GENERATORS
 from Multipliers import MULTIPLIERS
 from Stackquiz import start_stack_quiz
+from Glossary import ARM64_GLOSSARY, X86_GLOSSARY, GENERATOR_NAMES
 
 # ---------------------------------------------------------------------------
 # ── Game State ───────────────────────────────────────────────────────────────
@@ -497,6 +498,101 @@ def set_buy_quantity(qty: int) -> None:
 # ── UI construction ───────────────────────────────────────────────────────
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# ── Glossary system ───────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+
+def _get_generator_info(gen_name: str) -> str | None:
+    """Return the 'info' string from the matching GENERATOR entry, or None."""
+    for g in GENERATORS:
+        if g["name"] == gen_name:
+            return g["info"]
+    return None
+
+
+def show_glossary_popup(entry_name: str, info: str) -> None:
+    """
+    Display a glossary entry in a scrollable popup window.
+    If info starts with '__GENERATOR__:<name>', redirect to that generator's
+    info string so the content is never duplicated.
+    """
+    # Redirect to generator info when flagged
+    if info.startswith("__GENERATOR__:"):
+        gen_name = info.split(":", 1)[1]
+        gen_info = _get_generator_info(gen_name)
+        if gen_info:
+            info = gen_info
+
+    popup = tk.Toplevel(root)
+    popup.title(f"Glossary — {entry_name}")
+    popup.resizable(True, True)
+
+    # ── Scrollable text area ──────────────────────────────────────────────
+    frame = tk.Frame(popup)
+    frame.pack(fill="both", expand=True, padx=6, pady=6)
+
+    scrollbar = tk.Scrollbar(frame)
+    scrollbar.pack(side="right", fill="y")
+
+    text_widget = tk.Text(
+        frame,
+        wrap="word",
+        font=("Courier", 10),
+        width=64,
+        height=24,
+        yscrollcommand=scrollbar.set,
+        relief="flat",
+        padx=8,
+        pady=6,
+        state="normal",
+        cursor="arrow",
+    )
+    text_widget.insert("1.0", info)
+    text_widget.config(state="disabled")   # read-only
+    text_widget.pack(side="left", fill="both", expand=True)
+    scrollbar.config(command=text_widget.yview)
+
+    tk.Button(popup, text="Close", command=popup.destroy,
+              font=("Arial", 9, "bold")).pack(pady=(0, 8))
+
+
+def build_glossary_menu(parent_frame: tk.Frame) -> None:
+    """
+    Build the 'Glossary' menubutton with ARM64 and x86-64 submenus.
+    Each entry opens a show_glossary_popup when clicked.
+    Generator-overlapping entries are marked with '→ see Generator info'
+    in their label but still open the full generator info panel.
+    """
+    menu_btn = tk.Menubutton(
+        parent_frame,
+        text="📖 Glossary",
+        font=("Arial", 10, "bold"),
+        relief="raised",
+        bd=2,
+        padx=6,
+        pady=3,
+        cursor="hand2",
+    )
+    menu_btn.pack(side="left", padx=4, pady=4)
+
+    top_menu = tk.Menu(menu_btn, tearoff=0)
+    menu_btn.config(menu=top_menu)
+
+    for arch_label, entries in [("ARM64 (AArch64)", ARM64_GLOSSARY),
+                                 ("x86-64 (Intel/AMD)", X86_GLOSSARY)]:
+        sub = tk.Menu(top_menu, tearoff=0)
+        top_menu.add_cascade(label=arch_label, menu=sub)
+
+        for entry in entries:
+            name = entry["name"]
+            info = entry["info"]
+            # Command must capture name and info by value via default args
+            sub.add_command(
+                label=name,
+                command=lambda n=name, i=info: show_glossary_popup(n, i),
+            )
+
+
 def build_ui():
     global label, ips_label, click_btn, root
 
@@ -504,6 +600,11 @@ def build_ui():
     root.title("Instruction Clicker")
 
     processor_img = tk.PhotoImage(file="Processor.png")
+
+    # ── Glossary toolbar (top-left) ──────────────────────────────────────────
+    toolbar = tk.Frame(root, bd=1, relief="groove")
+    toolbar.pack(fill="x", padx=2, pady=(2, 0))
+    build_glossary_menu(toolbar)
 
     # ── Header ──────────────────────────────────────────────────────────────
     label = tk.Label(root, text="Instructions: 0x0", font=("Arial", 16))
