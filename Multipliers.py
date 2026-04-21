@@ -83,17 +83,17 @@ MULTIPLIERS = [
         "label": "Buy PARAM Passing",
         "base_cost": 600_000,
         "tooltip": (
-            "PARAM Passing — Level Equaliser\n"
+            "PARAM Passing — Count Equaliser\n"
             "─────────────────────────────────────────\n"
-            "Sets the individual multiplier of the LOWEST\n"
-            "generator to match the HIGHEST generator.\n\n"
-            "  Example: multipliers are [10, 3, 10, 2, 8, 10]\n"
+            "Sets the OWNED COUNT of the LOWEST generator\n"
+            "to match the count of the HIGHEST generator.\n\n"
+            "  Example: owned counts are [10, 3, 10, 2, 8, 10]\n"
             "    Lowest = LOAD/STORE at 2\n"
             "    Highest = MOV/IF_INST/BRANCH at 10\n"
-            "    Result: LOAD/STORE jumps to 10\n\n"
+            "    Result: LOAD/STORE jumps to 10 owned\n\n"
             "Only one generator is equalised per purchase.\n"
             "Buy multiple times to bring all laggards up\n"
-            "to the level of your top performers."
+            "to the count of your top performers."
         ),
     },
     {

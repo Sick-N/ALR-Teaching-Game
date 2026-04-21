@@ -27,6 +27,7 @@ import tkinter as tk
 from tkinter import messagebox
 from Generators import GENERATORS
 from Multipliers import MULTIPLIERS
+from Stackquiz import start_stack_quiz
 
 # ---------------------------------------------------------------------------
 # ── Game State ───────────────────────────────────────────────────────────────
@@ -55,6 +56,10 @@ ips_label: tk.Label
 click_btn: tk.Button
 gen_rows:  dict[str, dict] = {}   # name → {frame, btn, count_lbl, mult_lbl}
 mult_rows: dict[str, dict] = {}   # name → {frame, btn}
+
+# Buy-quantity selector: positive int = fixed amount, -1 = MAX
+buy_quantity: int = 1
+qty_buttons:  dict[int, tk.Button] = {}   # quantity → button widget
 
 root: tk.Tk
 
@@ -109,6 +114,35 @@ def next_mult_cost(mul: dict) -> int:
     """Multiplier costs double each purchase."""
     return int(mul["base_cost"] * (2 ** mult_counts[mul["name"]]))
 
+
+def cost_for_n(gen: dict, n: int) -> int:
+    """Total cost of buying n more of a generator (geometric sum)."""
+    base   = gen["base_cost"]
+    owned  = owned_counts[gen["name"]]
+    # sum_{i=0}^{n-1}  floor(base * 1.15^(owned+i))
+    # Use closed-form for the geometric series then floor at end.
+    # Exact integer sum to avoid float drift:
+    total = 0
+    for i in range(n):
+        total += int(base * (1.15 ** (owned + i)))
+    return total
+
+
+def max_affordable(gen: dict) -> int:
+    """How many of this generator can be bought with current instructions."""
+    affordable = 0
+    remaining  = instructions
+    base       = gen["base_cost"]
+    owned      = owned_counts[gen["name"]]
+    while True:
+        cost = int(base * (1.15 ** (owned + affordable)))
+        if remaining < cost:
+            break
+        remaining -= cost
+        affordable += 1
+    return affordable
+
+
 # ---------------------------------------------------------------------------
 # ── Display helpers ───────────────────────────────────────────────────────
 # ---------------------------------------------------------------------------
@@ -123,9 +157,26 @@ def fmt(n: float) -> str:
     return str(int(n))
 
 
+def fmt_ops(n: float) -> str:
+    """Format the instruction counter with CPU operation suffixes (op/Kop/Mop…)."""
+    if n < 1_000:
+        return f"{int(n)} op"
+    for val, suffix in [
+        (1e18, "Eop"),
+        (1e15, "Pop"),
+        (1e12, "Top"),
+        (1e9,  "Gop"),
+        (1e6,  "Mop"),
+        (1e3,  "Kop"),
+    ]:
+        if n >= val:
+            return f"{n/val:.2f} {suffix}"
+    return f"{int(n)} op"
+
+
 def update_display() -> None:
     """Refresh all dynamic UI text."""
-    label.config(text=f"Instructions: {hex(int(instructions))}")
+    label.config(text=f"Instructions: {fmt_ops(instructions)}")
     ips_label.config(
         text=f"IPS: {fmt(compute_total_ips())}   Click: ×{fmt(compute_total_multiplier())}"
     )
@@ -134,11 +185,24 @@ def update_display() -> None:
     for g in GENERATORS:
         n   = g["name"]
         row = gen_rows[n]
-        cost = next_gen_cost(g)
-        row["btn"].config(
-            text=f"{g['label']}  [{fmt(cost)}]",
-            state="normal" if instructions >= cost else "disabled",
-        )
+
+        if buy_quantity == -1:
+            qty = max_affordable(g)
+            if qty == 0:
+                cost      = next_gen_cost(g)
+                label_txt = f"{g['label']}  [MAX: {fmt(cost)}]"
+                can_buy   = False
+            else:
+                cost      = cost_for_n(g, qty)
+                label_txt = f"{g['label']}  [MAX×{qty}: {fmt(cost)}]"
+                can_buy   = True
+        else:
+            qty       = buy_quantity
+            cost      = cost_for_n(g, qty)
+            label_txt = f"{g['label']}  [×{qty}: {fmt(cost)}]"
+            can_buy   = instructions >= cost
+
+        row["btn"].config(text=label_txt, state="normal" if can_buy else "disabled")
         row["count_lbl"].config(text=f"×{owned_counts[n]}")
         row["mult_lbl"].config(text=f"mult:{gen_mult[n]:.0f}")
 
@@ -152,6 +216,13 @@ def update_display() -> None:
             text=f"{m['label']}  [Lv{lvl}] [{fmt(cost)}]",
             state="normal" if instructions >= cost else "disabled",
         )
+
+    # Highlight active quantity button
+    for qty_val, qbtn in qty_buttons.items():
+        if qty_val == buy_quantity:
+            qbtn.config(relief="sunken", bg="#a0c8ff")
+        else:
+            qbtn.config(relief="raised", bg="SystemButtonFace")
 
     refresh_stack_window()
 
@@ -255,19 +326,31 @@ def on_processor_click() -> None:
 # ---------------------------------------------------------------------------
 
 def buy_generator(gen: dict) -> None:
+    """Buy the currently selected quantity of a generator."""
     global instructions
-    cost = next_gen_cost(gen)
-    if instructions < cost:
+    name = gen["name"]
+
+    if buy_quantity == -1:
+        qty = max_affordable(gen)
+    else:
+        qty = buy_quantity
+
+    if qty <= 0:
         return
 
-    instructions -= cost
-    name = gen["name"]
-    owned_counts[name] += 1
-    popup_view_counts[name] = popup_view_counts.get(name, 0) + 1
+    total_cost = cost_for_n(gen, qty)
+    if instructions < total_cost:
+        return
+
+    instructions -= total_cost
+    owned_counts[name] += qty
+    popup_view_counts[name] = popup_view_counts.get(name, 0) + qty
 
     update_display()
 
-    if not popup_disabled.get(name, False):
+    # Only show popup once per click regardless of quantity, and only when
+    # buying 1 (showing a popup for 100× purchases would be spammy).
+    if qty == 1 and not popup_disabled.get(name, False):
         show_info_popup(name, gen["info"])
 
 # ---------------------------------------------------------------------------
@@ -296,9 +379,9 @@ def apply_multiplier_effect(name: str) -> None:
         pass   # exponent tracked in mult_counts; formula uses it
 
     elif name == "PARAM_PASSING":
-        max_mult = max(gen_mult.values())
-        min_name = min(gen_mult, key=lambda n: gen_mult[n])
-        gen_mult[min_name] = max_mult
+        max_owned = max(owned_counts.values())
+        min_name  = min(owned_counts, key=lambda n: owned_counts[n])
+        owned_counts[min_name] = max_owned
 
     elif name == "STACK":
         do_stack_prestige()
@@ -364,14 +447,23 @@ def buy_multiplier(mul: dict) -> None:
     name = mul["name"]
 
     if name == "STACK":
-        if not messagebox.askyesno(
-            "Prestige Reset",
-            "STACK will RESET all generators and upgrades!\n"
-            "You will gain a permanent ×10 multiplier.\n\n"
-            "Are you sure?",
-        ):
-            instructions += cost   # refund
-            return
+        # Pass instructions as a one-element list so StackQuiz can refund it.
+        instructions_ref = [instructions]
+
+        def on_passed():
+            global instructions
+            instructions = instructions_ref[0]   # pick up any refund writes
+            mult_counts[mul["name"]] += 1
+            apply_multiplier_effect(mul["name"])
+            update_display()
+
+        def on_cancel():
+            global instructions
+            instructions = instructions_ref[0] + cost   # refund
+            update_display()
+
+        start_stack_quiz(root, instructions_ref, on_passed, on_cancel)
+        return   # quiz callbacks handle the rest
 
     mult_counts[name] += 1
     apply_multiplier_effect(name)
@@ -379,14 +471,27 @@ def buy_multiplier(mul: dict) -> None:
     # NOTE: No popup is shown for multipliers — hover tooltip handles info.
 
 # ---------------------------------------------------------------------------
-# ── Auto-increment (1-second tick) ───────────────────────────────────────
+# ── Auto-increment (per-frame smooth tick, ~30 fps) ───────────────────────
 # ---------------------------------------------------------------------------
+
+_TICK_MS: int   = 33           # ~30 fps
+_TICK_S:  float = _TICK_MS / 1000.0
 
 def auto_increment() -> None:
     global instructions
-    instructions += compute_total_ips()
+    # Add the proportional fraction of IPS for this frame so that
+    # total instructions/second stays correct regardless of tick rate.
+    instructions += compute_total_ips() * _TICK_S
     update_display()
-    root.after(1000, auto_increment)
+    root.after(_TICK_MS, auto_increment)
+
+
+def set_buy_quantity(qty: int) -> None:
+    """Switch the active buy-quantity and refresh the display."""
+    global buy_quantity
+    buy_quantity = qty
+    update_display()
+
 
 # ---------------------------------------------------------------------------
 # ── UI construction ───────────────────────────────────────────────────────
@@ -403,6 +508,18 @@ def build_ui():
     # ── Header ──────────────────────────────────────────────────────────────
     label = tk.Label(root, text="Instructions: 0x0", font=("Arial", 16))
     label.pack()
+
+    # Tooltip mapping op-suffix → full name
+    _OPS_TOOLTIP = (
+        "op  = operation (< 1,000)\n"
+        "Kop = Kilo-operation  (×1,000)\n"
+        "Mop = Mega-operation  (×1,000,000)\n"
+        "Gop = Giga-operation  (×1,000,000,000)\n"
+        "Top = Tera-operation  (×1,000,000,000,000)\n"
+        "Pop = Peta-operation  (×1,000,000,000,000,000)\n"
+        "Eop = Exa-operation   (×1,000,000,000,000,000,000)"
+    )
+    Tooltip(label, _OPS_TOOLTIP)
 
     ips_label = tk.Label(root, text="IPS: 0   Click: ×1", font=("Arial", 13))
     ips_label.pack()
@@ -427,6 +544,22 @@ def build_ui():
 
     # ── Generators section ───────────────────────────────────────────────────
     tk.Label(root, text="─── Generators ───", font=("Arial", 11, "bold")).pack(pady=(6, 0))
+
+    # Quantity selector bar
+    qty_frame = tk.Frame(root)
+    qty_frame.pack(pady=(2, 4))
+    tk.Label(qty_frame, text="Buy:", font=("Arial", 9)).pack(side="left", padx=(0, 4))
+    for qty_val, qty_label in [(1, "1×"), (2, "2×"), (5, "5×"), (10, "10×"),
+                                (25, "25×"), (100, "100×"), (-1, "MAX")]:
+        btn = tk.Button(
+            qty_frame,
+            text=qty_label,
+            width=4,
+            font=("Arial", 8, "bold"),
+            command=lambda q=qty_val: set_buy_quantity(q),
+        )
+        btn.pack(side="left", padx=1)
+        qty_buttons[qty_val] = btn
 
     for g in GENERATORS:
         frame = tk.Frame(root)
