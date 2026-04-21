@@ -1,5 +1,5 @@
 # StackQuiz.py
-# STACK prestige quiz — question pool and UI engine.
+# RET prestige quiz — question pool and UI engine.
 #
 # Public API (imported by main.py):
 #   start_stack_quiz(root, instructions_ref, on_quiz_passed, on_cancel)
@@ -975,7 +975,7 @@ def start_stack_quiz(
     on_cancel,
 ) -> None:
     """
-    Entry point. Call this when the player attempts a STACK prestige.
+    Entry point. Call this when the player attempts a RET prestige.
 
     Parameters
     ----------
@@ -1007,7 +1007,7 @@ def _run_question(root, instructions_ref, questions, idx,
 
     q   = questions[idx]
     win = tk.Toplevel(root)
-    win.title(f"STACK Prestige Quiz — Question {idx + 1} of {len(questions)}")
+    win.title(f"RET Prestige Quiz — Question {idx + 1} of {len(questions)}")
     win.resizable(False, False)
     win.grab_set()
 
@@ -1022,7 +1022,7 @@ def _run_question(root, instructions_ref, questions, idx,
     # ── Header ───────────────────────────────────────────────────────────
     tk.Label(
         win,
-        text="⚠  Answer to confirm STACK Prestige reset  ⚠",
+        text="⚠  Answer to confirm RET Prestige reset  ⚠",
         font=("Arial", 10, "bold"),
         fg="#cc4400",
         pady=6,

@@ -16,7 +16,7 @@ GENERATORS = [
         "name": "MOV",
         "label": "Buy MOV Unit",
         "base_cost": 10,
-        "increment": 1,
+        "increment": 5,
         "info": (
             "MOV — Move / Register Copy\n"
             "══════════════════════════════════════════\n\n"
@@ -64,8 +64,8 @@ GENERATORS = [
     {
         "name": "ADD",
         "label": "Buy ADD Unit",
-        "base_cost": 100,
-        "increment": 5,
+        "base_cost": 2000,
+        "increment": 50,
         "info": (
             "ADD — Integer Addition\n"
             "══════════════════════════════════════════\n\n"
@@ -112,8 +112,8 @@ GENERATORS = [
     {
         "name": "IF_INST",
         "label": "Buy IF Unit",
-        "base_cost": 500,
-        "increment": 20,
+        "base_cost": 10000,
+        "increment": 650,
         "info": (
             "Conditional Branch — compiled IF / ELSE\n"
             "══════════════════════════════════════════\n\n"
@@ -173,8 +173,8 @@ GENERATORS = [
     {
         "name": "LOAD_STORE",
         "label": "Buy LOAD/STORE Unit",
-        "base_cost": 2_000,
-        "increment": 80,
+        "base_cost": 40000,
+        "increment": 1200,
         "info": (
             "LOAD / STORE — Memory Access\n"
             "══════════════════════════════════════════\n\n"
@@ -226,8 +226,8 @@ GENERATORS = [
     {
         "name": "CMP",
         "label": "Buy CMP Unit",
-        "base_cost": 8_000,
-        "increment": 300,
+        "base_cost": 160000,
+        "increment": 15000,
         "info": (
             "CMP — Compare (subtract-and-discard)\n"
             "══════════════════════════════════════════\n\n"
@@ -283,8 +283,8 @@ GENERATORS = [
     {
         "name": "BRANCH",
         "label": "Buy BRANCH Unit",
-        "base_cost": 30_000,
-        "increment": 1_000,
+        "base_cost": 600000,
+        "increment": 200000,
         "info": (
             "BRANCH — Unconditional Jump & Function Call\n"
             "══════════════════════════════════════════\n\n"

@@ -98,10 +98,27 @@ MULTIPLIERS = [
     },
     {
         "name": "STACK",
-        "label": "Buy STACK (PRESTIGE)",
+        "label": "Buy STACK",
         "base_cost": 5_000_000,
         "tooltip": (
-            "STACK — Prestige Reset  ⚠ Resets Everything!\n"
+            "STACK — Convert Multipliers into Generators\n"
+            "─────────────────────────────────────────\n"
+            "Each purchase ADDS the integer portion of every\n"
+            "generator's current multiplier to that generator's\n"
+            "owned count. For example, if MOV has mult = 300.7,\n"
+            "buying STACK will add 300 MOV to your owned count.\n\n"
+            "This lets you convert large multiplier values into\n"
+            "actual owned units without performing a full reset.\n"
+            "Stacks with every purchase — buy repeatedly to\n"
+            "turn multiplier gains into concrete owned boosts."
+        ),
+    },
+    {
+        "name": "RET",
+        "label": "Buy RET (PRESTIGE)",
+        "base_cost": 5_000_000,
+        "tooltip": (
+            "RET — Prestige Reset  ⚠ Resets Everything!\n"
             "─────────────────────────────────────────\n"
             "RESETS:\n"
             "  • All generator owned counts → 0\n"
@@ -109,12 +126,12 @@ MULTIPLIERS = [
             "  • All multiplier levels      → 0\n"
             "  • Current instruction count  → 0\n"
             "  • All 'don't show again' popup settings\n\n"
-            "GRANTS (permanent, survives resets):\n"
-            "  • ×10 STACK multiplier, stacking per prestige\n"
+            "GRANTS PERMANENTLY:\n"
+            "  • ×10 RET multiplier, stacking per prestige\n"
             "    1 prestige = ×10\n"
             "    2 prestiges = ×100\n"
             "    3 prestiges = ×1,000  etc.\n\n"
-            "A STACK prestige window opens to track your\n"
+            "A RET prestige window opens to track your\n"
             "permanent bonus. The reset is shown as a\n"
             "confirmation dialog — you will be asked twice."
         ),

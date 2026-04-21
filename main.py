@@ -16,9 +16,9 @@
 #       base_sum  = sum(raw_ips[g] for all g)
 #       for_level = number of FOR_LOOP purchases
 #       fc_level  = number of FUNCTION_CALL purchases
-#       stack_mul = 10 ^ stack_prestige_count  (permanent)
-#
-#       TOTAL_IPS = (max(for_level,1) * base_sum) ^ (1 + fc_level) * stack_mul
+#       ret_mul = 10 ^ stack_prestige_count  (permanent)
+
+#       TOTAL_IPS = (max(for_level,1) * base_sum) ^ (1 + fc_level) * ret_mul
 #
 #   Click value uses the same global multiplier applied to 1 base instruction.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -29,6 +29,15 @@ from Generators import GENERATORS
 from Multipliers import MULTIPLIERS
 from Stackquiz import start_stack_quiz
 from Glossary import ARM64_GLOSSARY, X86_GLOSSARY, GENERATOR_NAMES
+
+# Theme colors — old-school circuit board (forest green / amber gold / blue)
+THEME_BG         = "#0b3d0b"   # deep circuit-board green
+THEME_PANEL      = "#124f1a"   # slightly lighter panel green
+THEME_ACCENT     = "#d4af37"   # amber/gold highlights
+THEME_HIGHLIGHT  = "#2a8cff"   # accent blue for touches
+THEME_TEXT       = "#ffd700"   # yellow/gold text for contrast
+BUTTON_BG        = "#0f6b23"
+BUTTON_ACTIVE_BG = "#1aa34b"
 
 # ---------------------------------------------------------------------------
 # ── Game State ───────────────────────────────────────────────────────────────
@@ -43,11 +52,11 @@ gen_mult:     dict[str, float] = {g["name"]: 1.0 for g in GENERATORS}
 # High-level multiplier purchase counts
 mult_counts: dict[str, int] = {m["name"]: 0 for m in MULTIPLIERS}
 
-# Prestige (STACK) — permanent across resets within a session
+# Prestige (RET) — permanent across resets within a session
 stack_prestige: int = 0
 stack_window: tk.Toplevel | None = None
 
-# Popup suppression for generator info windows (reset on STACK prestige)
+# Popup suppression for generator info windows (reset on RET prestige)
 popup_view_counts: dict[str, int]  = {}
 popup_disabled:    dict[str, bool] = {}
 
@@ -107,7 +116,7 @@ def compute_click_value() -> float:
 
 
 def next_gen_cost(gen: dict) -> int:
-    """Cookie-clicker scaling: base_cost × 1.15^owned."""
+    """IPS scaling: base_cost × 1.15^owned."""
     return int(gen["base_cost"] * (1.15 ** owned_counts[gen["name"]]))
 
 
@@ -203,7 +212,8 @@ def update_display() -> None:
             label_txt = f"{g['label']}  [×{qty}: {fmt(cost)}]"
             can_buy   = instructions >= cost
 
-        row["btn"].config(text=label_txt, state="normal" if can_buy else "disabled")
+        row["btn"].config(text=label_txt, state="normal" if can_buy else "disabled",
+                     bg=BUTTON_BG if can_buy else THEME_PANEL)
         row["count_lbl"].config(text=f"×{owned_counts[n]}")
         row["mult_lbl"].config(text=f"mult:{gen_mult[n]:.0f}")
 
@@ -216,14 +226,15 @@ def update_display() -> None:
         row["btn"].config(
             text=f"{m['label']}  [Lv{lvl}] [{fmt(cost)}]",
             state="normal" if instructions >= cost else "disabled",
+            bg=BUTTON_BG if instructions >= cost else THEME_PANEL,
         )
 
     # Highlight active quantity button
     for qty_val, qbtn in qty_buttons.items():
         if qty_val == buy_quantity:
-            qbtn.config(relief="sunken", bg="#a0c8ff")
+            qbtn.config(relief="sunken", bg=THEME_HIGHLIGHT, fg=THEME_TEXT)
         else:
-            qbtn.config(relief="raised", bg="SystemButtonFace")
+            qbtn.config(relief="raised", bg=BUTTON_BG, fg=THEME_TEXT)
 
     refresh_stack_window()
 
@@ -234,7 +245,7 @@ def refresh_stack_window() -> None:
         for widget in stack_window.winfo_children():
             if isinstance(widget, tk.Label):
                 widget.config(
-                    text=f"STACK Prestige Count: {stack_prestige}\n"
+                    text=f"RET Prestige Count: {stack_prestige}\n"
                          f"Permanent Multiplier: ×{10 ** stack_prestige:,}"
                 )
                 break
@@ -385,11 +396,21 @@ def apply_multiplier_effect(name: str) -> None:
         owned_counts[min_name] = max_owned
 
     elif name == "STACK":
-        do_stack_prestige()
+        # Convert current per-generator multipliers into owned counts.
+        # For each generator, add the integer portion of its multiplier
+        # to the owned count (e.g., mult 300.7 -> add 300 owned units).
+        for g in GENERATORS:
+            n = g["name"]
+            add_amt = int(gen_mult.get(n, 1.0))
+            if add_amt > 0:
+                owned_counts[n] += add_amt
+
+    elif name == "RET":
+        do_ret_prestige()
 
 
-def do_stack_prestige() -> None:
-    """Prestige reset: wipe everything, grant ×10 permanent bonus."""
+def do_ret_prestige() -> None:
+    """Prestige reset invoked by RET: wipe everything, grant ×10 permanent bonus."""
     global instructions, stack_prestige
 
     stack_prestige += 1
@@ -399,29 +420,29 @@ def do_stack_prestige() -> None:
         gen_mult[g["name"]]     = 1.0
 
     for m in MULTIPLIERS:
-        if m["name"] != "STACK":
+        if m["name"] != "RET":
             mult_counts[m["name"]] = 0
 
     instructions = 0.0
     popup_view_counts.clear()
     popup_disabled.clear()
 
-    open_stack_window()
+    open_ret_window()
     update_display()
 
 
-def open_stack_window() -> None:
+def open_ret_window() -> None:
     global stack_window
     if stack_window and stack_window.winfo_exists():
         stack_window.destroy()
 
     stack_window = tk.Toplevel(root)
-    stack_window.title("STACK Prestige")
+    stack_window.title("RET Prestige")
     stack_window.resizable(False, False)
 
     tk.Label(
         stack_window,
-        text=f"STACK Prestige Count: {stack_prestige}\n"
+        text=f"RET Prestige Count: {stack_prestige}\n"
              f"Permanent Multiplier: ×{10 ** stack_prestige:,}",
         font=("Arial", 14, "bold"),
         padx=20,
@@ -431,7 +452,9 @@ def open_stack_window() -> None:
 
     tk.Label(
         stack_window,
-        text="This bonus persists until you close the game.",
+        text=("RET performs a full prestige reset: it resets generators,\n"
+              "multipliers, and instructions, and grants a permanent\n"
+              "×10 stacking bonus per prestige level."),
         font=("Arial", 9),
         padx=10,
         pady=5,
@@ -447,7 +470,7 @@ def buy_multiplier(mul: dict) -> None:
     instructions -= cost
     name = mul["name"]
 
-    if name == "STACK":
+    if name == "RET":
         # Pass instructions as a one-element list so StackQuiz can refund it.
         instructions_ref = [instructions]
 
@@ -595,119 +618,121 @@ def build_glossary_menu(parent_frame: tk.Frame) -> None:
 
 def build_ui():
     global label, ips_label, click_btn, root
-
+    # Build root window
     root = tk.Tk()
     root.title("Instruction Clicker")
+    root.geometry("1000x640")
+    root.configure(bg=THEME_BG)
 
     processor_img = tk.PhotoImage(file="Processor.png")
 
-    # ── Glossary toolbar (top-left) ──────────────────────────────────────────
-    toolbar = tk.Frame(root, bd=1, relief="groove")
+    # Top toolbar
+    toolbar = tk.Frame(root, bd=0, relief="flat", bg=THEME_PANEL)
     toolbar.pack(fill="x", padx=2, pady=(2, 0))
     build_glossary_menu(toolbar)
 
-    # ── Header ──────────────────────────────────────────────────────────────
-    label = tk.Label(root, text="Instructions: 0x0", font=("Arial", 16))
-    label.pack()
+    # Main two-column container
+    main_container = tk.Frame(root, bg=THEME_BG)
+    main_container.pack(fill="both", expand=True, padx=8, pady=8)
 
-    # Tooltip mapping op-suffix → full name
-    _OPS_TOOLTIP = (
-        "op  = operation (< 1,000)\n"
-        "Kop = Kilo-operation  (×1,000)\n"
-        "Mop = Mega-operation  (×1,000,000)\n"
-        "Gop = Giga-operation  (×1,000,000,000)\n"
-        "Top = Tera-operation  (×1,000,000,000,000)\n"
-        "Pop = Peta-operation  (×1,000,000,000,000,000)\n"
-        "Eop = Exa-operation   (×1,000,000,000,000,000,000)"
-    )
-    Tooltip(label, _OPS_TOOLTIP)
+    # Left column: header, click, generators
+    left_col = tk.Frame(main_container, bg=THEME_BG)
+    left_col.pack(side="left", fill="both", expand=True, padx=(0,8))
 
-    ips_label = tk.Label(root, text="IPS: 0   Click: ×1", font=("Arial", 13))
-    ips_label.pack()
+    label = tk.Label(left_col, text="Instructions: 0x0", font=("Arial", 18, "bold"),
+                     bg=THEME_BG, fg=THEME_TEXT)
+    label.pack(anchor="nw")
 
-    click_btn = tk.Button(root, image=processor_img, command=on_processor_click)
-    click_btn.pack(pady=4)
-    click_btn.image = processor_img   # prevent GC
+    ips_label = tk.Label(left_col, text="IPS: 0   Click: ×1", font=("Arial", 13),
+                         bg=THEME_BG, fg=THEME_TEXT)
+    ips_label.pack(anchor="nw", pady=(2,6))
 
-    # ── DEBUG ────────────────────────────────────────────────────────────────
+    click_btn = tk.Button(left_col, image=processor_img, command=on_processor_click,
+                          bd=0, bg=BUTTON_BG, activebackground=BUTTON_ACTIVE_BG)
+    click_btn.pack(pady=6)
+    click_btn.image = processor_img
+
+    # Debug button
     def debug_give_money() -> None:
         global instructions
         instructions += 1_000_000_000
         update_display()
 
-    tk.Button(
-        root,
-        text="[DEBUG] +1 Billion Instructions",
-        command=debug_give_money,
-        fg="red",
-        font=("Arial", 9, "italic"),
-    ).pack(pady=(0, 4))
+    tk.Button(left_col, text="[DEBUG] +1 Billion Instructions",
+              command=debug_give_money, fg="red", font=("Arial", 9, "italic"),
+              bg=THEME_PANEL).pack(pady=(0, 6))
 
-    # ── Generators section ───────────────────────────────────────────────────
-    tk.Label(root, text="─── Generators ───", font=("Arial", 11, "bold")).pack(pady=(6, 0))
+    # Generators frame (scrolling not required for a few entries)
+    tk.Label(left_col, text="Generators", font=("Arial", 12, "bold"),
+             bg=THEME_BG, fg=THEME_ACCENT).pack(anchor="nw", pady=(6,2))
+
+    gen_panel = tk.Frame(left_col, bg=THEME_PANEL, bd=1, relief="ridge")
+    gen_panel.pack(fill="both", expand=True, padx=4, pady=4)
 
     # Quantity selector bar
-    qty_frame = tk.Frame(root)
-    qty_frame.pack(pady=(2, 4))
-    tk.Label(qty_frame, text="Buy:", font=("Arial", 9)).pack(side="left", padx=(0, 4))
-    for qty_val, qty_label in [(1, "1×"), (2, "2×"), (5, "5×"), (10, "10×"),
-                                (25, "25×"), (100, "100×"), (-1, "MAX")]:
-        btn = tk.Button(
-            qty_frame,
-            text=qty_label,
-            width=4,
-            font=("Arial", 8, "bold"),
-            command=lambda q=qty_val: set_buy_quantity(q),
-        )
-        btn.pack(side="left", padx=1)
+    qty_frame = tk.Frame(gen_panel, bg=THEME_PANEL)
+    qty_frame.pack(pady=(6, 8), padx=6, anchor="w")
+    tk.Label(qty_frame, text="Buy:", font=("Arial", 9), bg=THEME_PANEL, fg=THEME_TEXT).pack(side="left", padx=(0, 8))
+    for qty_val, qty_label in [(1, "1×"), (2, "2×"), (5, "5×"), (10, "10×"), (25, "25×"), (100, "100×"), (-1, "MAX")]:
+        btn = tk.Button(qty_frame, text=qty_label, width=5, font=("Arial", 9, "bold"),
+                command=lambda q=qty_val: set_buy_quantity(q), bg=BUTTON_BG, fg=THEME_TEXT,
+                activebackground=BUTTON_ACTIVE_BG, activeforeground=THEME_TEXT,
+                disabledforeground=THEME_TEXT)
+        btn.pack(side="left", padx=2)
         qty_buttons[qty_val] = btn
 
+    # Generator rows
     for g in GENERATORS:
-        frame = tk.Frame(root)
-        frame.pack(pady=1, fill="x", padx=6)
+        frame = tk.Frame(gen_panel, bg=THEME_PANEL)
+        frame.pack(pady=4, fill="x", padx=6)
 
-        btn = tk.Button(
-            frame,
-            text=f"{g['label']}  [{g['base_cost']}]",
-            width=36,
-            anchor="w",
-            command=lambda _g=g: buy_generator(_g),
-        )
+        btn = tk.Button(frame, text=f"{g['label']}  [{g['base_cost']}]",
+            width=36, anchor="w", command=lambda _g=g: buy_generator(_g),
+            bg=BUTTON_BG, fg=THEME_TEXT, activebackground=BUTTON_ACTIVE_BG, activeforeground=THEME_TEXT,
+            disabledforeground=THEME_TEXT, bd=0)
         btn.pack(side="left")
 
-        count_lbl = tk.Label(frame, text="×0", width=5, anchor="e")
-        count_lbl.pack(side="left")
+        count_lbl = tk.Label(frame, text="×0", width=6, anchor="e", bg=THEME_PANEL, fg=THEME_TEXT)
+        count_lbl.pack(side="left", padx=(8,0))
 
-        mult_lbl = tk.Label(frame, text="mult:1", width=8, anchor="w")
-        mult_lbl.pack(side="left", padx=4)
+        mult_lbl = tk.Label(frame, text="mult:1", width=9, anchor="w", bg=THEME_PANEL, fg=THEME_TEXT)
+        mult_lbl.pack(side="left", padx=6)
 
-        gen_rows[g["name"]] = {
-            "frame": frame,
-            "btn": btn,
-            "count_lbl": count_lbl,
-            "mult_lbl": mult_lbl,
-        }
+        gen_rows[g["name"]] = {"frame": frame, "btn": btn, "count_lbl": count_lbl, "mult_lbl": mult_lbl}
 
-    # ── Multipliers section ──────────────────────────────────────────────────
-    tk.Label(root, text="─── Multipliers ───", font=("Arial", 11, "bold")).pack(pady=(8, 0))
+    # Right column: multipliers box
+    right_col = tk.Frame(main_container, bg=THEME_PANEL, bd=2, relief="groove")
+    right_col.pack(side="right", fill="y", padx=(8,0), pady=4)
+    tk.Label(right_col, text="Multipliers", font=("Arial", 12, "bold"), bg=THEME_PANEL, fg=THEME_ACCENT).pack(pady=(6,4))
+
+    mult_container = tk.Frame(right_col, bg=THEME_PANEL)
+    mult_container.pack(padx=6, pady=6)
 
     for m in MULTIPLIERS:
-        frame = tk.Frame(root)
-        frame.pack(pady=1, fill="x", padx=6)
+        frame = tk.Frame(mult_container, bg=THEME_PANEL)
+        frame.pack(pady=6, fill="x")
 
-        btn = tk.Button(
-            frame,
-            text=f"{m['label']}  [Lv0] [{m['base_cost']}]",
-            width=44,
-            anchor="w",
-            command=lambda _m=m: buy_multiplier(_m),
-        )
+        btn = tk.Button(frame, text=f"{m['label']}  [Lv0] [{m['base_cost']}]",
+                width=30, anchor="w", command=lambda _m=m: buy_multiplier(_m),
+                bg=THEME_PANEL, fg=THEME_TEXT, activebackground=BUTTON_ACTIVE_BG, activeforeground=THEME_TEXT,
+                disabledforeground=THEME_TEXT, bd=0)
         btn.pack(side="left")
 
-        # Attach hover tooltip with game-mechanic description
         Tooltip(btn, m["tooltip"])
 
         mult_rows[m["name"]] = {"frame": frame, "btn": btn}
+
+    # Ensure interactive widgets are above the background images
+    try:
+        click_btn.lift()
+        for qbtn in qty_buttons.values():
+            qbtn.lift()
+        for r in gen_rows.values():
+            r["btn"].lift()
+        for r in mult_rows.values():
+            r["btn"].lift()
+    except Exception:
+        pass
 
     return root, processor_img
 
